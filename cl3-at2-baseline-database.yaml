@@ -1,3 +1,6 @@
+ # ------------------------------------------------------------------
+  # Database v1 by Jacob T
+  # ------------------------------------------------------------------
   DbSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -16,8 +19,7 @@
       DBInstanceIdentifier: enrolline-db
       Engine: postgres
       DBInstanceClass: !Ref DbInstanceClass
-      MultiAZ: false
-      AvailabilityZone: !GetAtt DataSubnetA.AvailabilityZone
+      MultiAZ: true
       AllocatedStorage: '20'
       StorageType: gp3
       StorageEncrypted: true
@@ -30,4 +32,5 @@
       BackupRetentionPeriod: 7
       Tags:
         - Key: Name
-          Value: enrolline-db
+          Value: enrolline-db 
+  
