@@ -1,0 +1,505 @@
+# =====================================================================================
+# Baseline deployment of YATs Enrolline application
+# =====================================================================================
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+ Baseline deployment template for YATs enrolline application before any improvements have been 
+ made. Includes Network, Compute, Database and Storage. Real world deployment is Sydney region ap-southeast-2.
+ Deploy in us-east-1a/b for learnerlab. Include the following tags when prompted when deploying: owner : yat , project : enrolline
+
+# =====================================================================================
+# Parameters - Basically defining variables here that are selected during deployment
+# in cloudformation and referred to later in the template.
+#
+# IMPORTANT note about regions: CloudFormation uses whatever region the console is set to;
+# in the top righthand corner, so no imput is required, it will default to us-east-1.
+#
+# The AZs work in a similar way, the code selects the first and second available AZs so automatically selects a/b.
+# =====================================================================================
+
+Parameters:
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: Don't change this. Amazon Linux 2023 AMI.
+
+  InstanceProfileName:
+    Type: String
+    Default: LabInstanceProfile
+    Description: Don't change this. Default profile for learnerlab.
+
+  DbMasterUsername:
+    Type: String
+    Default: enrolline_admin
+    Description: Master username for the RDS PostgreSQL instance. (take note but no need to change).
+
+  DbMasterPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+    MaxLength: 41
+    AllowedPattern: '[a-zA-Z0-9!#$%^&*()_+=-]*'
+    ConstraintDescription: At least 8 characters, letters, numbers and '!' '#' '$' '%' '^' '&' '*' '(' ')' '_' '+' '=' '-'.
+    Description: Master password for the RDS PostgreSQL instance. Recommended is 'password'
+
+  AppInstanceType:
+    Type: String
+    Default: t3.small
+    AllowedValues: [t3.micro, t3.small]
+    Description: Application instance type (Doesn't really matter).
+
+  DbInstanceClass:
+    Type: String
+    Default: db.t3.small
+    AllowedValues: [db.t3.micro, db.t3.small]
+    Description: Database instance class.
+
+  DocumentBucketName:
+    Type: String
+    Default: yat-enrolline-documents
+    Description: S3 bucket names are globally unique. Add -<accountid> eg. yat-enrolline-documents-123412341234
+
+Resources:
+  
+# ------------------------------------------------------------------
+# Network Start - Ryan
+# -----------------------------------------------------------------
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.30.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: enrolline-vpc
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: enrolline-igw
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.30.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: enrolline-public-a
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.30.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: enrolline-public-b
+
+  AppSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.30.11.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: enrolline-app-a
+
+  DataSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.30.21.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: enrolline-data-a
+
+  DataSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.30.22.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: enrolline-data-b
+
+  NatEip:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: enrolline-eip
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEip.AllocationId
+      SubnetId: !Ref PublicSubnetA
+      Tags:
+        - Key: Name
+          Value: enrolline-nat
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: enrolline-public-rt
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref PublicRouteTable
+
+  AppRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: enrolline-app-rt
+
+  AppRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref AppRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  AppSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref AppSubnetA
+      RouteTableId: !Ref AppRouteTable
+
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: enrolline-alb-sg
+      GroupDescription: Enrolline load balancer - HTTP:80 from the internet
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: enrolline-alb-sg
+
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: enrolline-app-sg
+      GroupDescription: Enrolline application tier - HTTP:80 from the load balancer only
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref AlbSecurityGroup
+      Tags:
+        - Key: Name
+          Value: enrolline-app-sg
+
+  DbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: enrolline-db-sg
+      GroupDescription: Enrolline database tier - PostgreSQL:5432 from the application tier only
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref AppSecurityGroup
+      Tags:
+        - Key: Name
+          Value: enrolline-db-sg
+# ------------------------------------------------------------------
+# Network End - Ryan
+# ------------------------------------------------------------------
+
+# ------------------------------------------------------------------
+# Compute Start - Grace
+# ------------------------------------------------------------------
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: enrolline-alb
+      Type: application
+      Scheme: internet-facing
+      IpAddressType: ipv4
+      Subnets:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetB
+      SecurityGroups:
+        - !Ref AlbSecurityGroup
+      Tags:
+        - Key: Name
+          Value: enrolline-alb
+    DependsOn: PublicRoute
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: enrolline-tg
+      VpcId: !Ref Vpc
+      Protocol: HTTP
+      Port: 80
+      TargetType: instance
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 30
+      UnhealthyThresholdCount: 2
+      Tags:
+        - Key: Name
+          Value: enrolline-tg
+
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: enrolline-launch-template
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: !Ref AppInstanceType
+        IamInstanceProfile:
+          Name: !Ref InstanceProfileName
+        SecurityGroupIds:
+          - !Ref AppSecurityGroup
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeType: gp3
+              VolumeSize: 8
+              DeleteOnTermination: true
+              Encrypted: true
+        MetadataOptions:
+          HttpTokens: required
+
+        # The following user data defines a placeholder web page using apache to
+        # preserve the tech stack and so that health checks can pass.
+        
+        UserData:
+          Fn::Base64: |
+            #!/bin/bash
+            dnf install -y httpd
+            echo "Enrolline woz 'ere" > /var/www/html/index.html
+            systemctl enable --now httpd
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: enrolline-app
+          - ResourceType: volume
+            Tags:
+              - Key: Name
+                Value: enrolline-app
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn:
+      - Listener
+      - AppRoute
+    Properties:
+      AutoScalingGroupName: enrolline-asg
+      MinSize: '1'
+      DesiredCapacity: '1'
+      MaxSize: '2'
+      VPCZoneIdentifier:
+        - !Ref AppSubnetA
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      TargetGroupARNs:
+        - !Ref TargetGroup
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      Tags:
+        - Key: Name
+          Value: enrolline-app
+          PropagateAtLaunch: true
+
+  ScalingPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: 70
+# ------------------------------------------------------------------
+# Compute End - Grace
+# ------------------------------------------------------------------
+
+# ------------------------------------------------------------------
+# Database Start
+# ------------------------------------------------------------------
+  # ------------------------------------------------------------------
+  # Database v1 by Jacob T
+  # ------------------------------------------------------------------
+  DbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: enrolline-db-subnet-group
+      DBSubnetGroupDescription: Enrolline database subnets (data-a and data-b)
+      SubnetIds:
+        - !Ref DataSubnetA
+        - !Ref DataSubnetB
+      Tags:
+        - Key: Name
+          Value: enrolline-db-subnet-group
+
+  Database:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: enrolline-db
+      Engine: postgres
+      DBInstanceClass: !Ref DbInstanceClass
+      # Integrator replaced AZ argument after chatting with Jacob as it was removed erroneously 
+      MultiAZ: true
+      AvailabilityZone: !GetAtt DataSubnetA.AvailabilityZone
+      AllocatedStorage: '20'
+      StorageType: gp3
+      StorageEncrypted: true
+      MasterUsername: !Ref DbMasterUsername
+      MasterUserPassword: !Ref DbMasterPassword
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DbSecurityGroup
+      PubliclyAccessible: false
+      BackupRetentionPeriod: 7
+      Tags:
+        - Key: Name
+          Value: enrolline-db 
+  
+# ------------------------------------------------------------------
+# Database End
+# ------------------------------------------------------------------
+
+# ------------------------------------------------------------------
+# Storage Start
+# ------------------------------------------------------------------
+  DocumentBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref DocumentBucketName
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: enrolline-bucket
+# ------------------------------------------------------------------
+# Storage End
+# ------------------------------------------------------------------
+
+# ------------------------------------------------------------------
+# Monitoring Start
+# ------------------------------------------------------------------
+  UnhealthyHostsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: enrolline-unhealthy-hosts
+      AlarmDescription: Any unhealthy target behind the Enrolline load balancer
+      Namespace: AWS/ApplicationELB
+      MetricName: UnHealthyHostCount
+      Dimensions:
+        - Name: TargetGroup
+          Value: !GetAtt TargetGroup.TargetGroupFullName
+        - Name: LoadBalancer
+          Value: !GetAtt LoadBalancer.LoadBalancerFullName
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+  DbStorageLowAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: enrolline-db-storage-low
+      AlarmDescription: Enrolline database free storage below 15% of the 20 GB allocation
+      Namespace: AWS/RDS
+      MetricName: FreeStorageSpace
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref Database
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 3221225472 # 15% of 20 GiB, in bytes
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: notBreaching
+# ------------------------------------------------------------------
+# Monitoring End
+# ------------------------------------------------------------------
+
+Outputs:
+  LoadBalancerUrl:
+    Description: Enrolline front door (HTTP, as specified)
+    Value: !Sub http://${LoadBalancer.DNSName}
+  DatabaseEndpoint:
+    Description: RDS PostgreSQL endpoint
+    Value: !GetAtt Database.Endpoint.Address
+  DocumentBucketName:
+    Description: Student document store
+    Value: !Ref DocumentBucket
