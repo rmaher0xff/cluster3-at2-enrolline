@@ -19,7 +19,11 @@
       DBInstanceIdentifier: enrolline-db
       Engine: postgres
       DBInstanceClass: !Ref DbInstanceClass
+      #
+      # Integrator replaced AZ argument after chatting with Jacob as it was removed erroneously
+      # 
       MultiAZ: true
+      AvailabilityZone: !GetAtt DataSubnetA.AvailabilityZone
       AllocatedStorage: '20'
       StorageType: gp3
       StorageEncrypted: true
