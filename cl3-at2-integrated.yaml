@@ -320,13 +320,13 @@ Resources:
           Value: !Ref LogsBucket
         - Key: access_logs.s3.prefix #integrator corrected spelling, was acces_logs.s3.prefix
           Value: alb-access-logs
-        
       SecurityGroups:
         - !Ref AlbSecurityGroup
       Tags:
         - Key: Name
           Value: enrolline-alb
     DependsOn: PublicRoute
+    
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
