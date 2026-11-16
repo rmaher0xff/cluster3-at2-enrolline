@@ -299,6 +299,18 @@ Resources:
       #Integrator changed for consistant naming conventions
         - Key: Name
           Value: enrolline-s3-gateway-endpoint
+  
+  #Integrator added this block - Alice had prior commitments so I took on the work load.
+  VPCFlowLog:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      ResourceId: !Ref Vpc
+      ResourceType: VPC
+      TrafficType: ALL
+      LogDestinationType: s3 #was S3, caused errors.
+      LogDestination: !Sub "arn:${AWS::Partition}:s3:::${LogsBucket}" #was !ref LogsBucket, doesn't work that wat, needs to be arn.
+      MaxAggregationInterval: 600
+      
 # ------------------------------------------------------------------
 # Network End
 # ------------------------------------------------------------------
