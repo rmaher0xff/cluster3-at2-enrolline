@@ -671,6 +671,16 @@ Resources:
                 s3:x-amz-acl: bucket-owner-full-control
               ArnLike:
                 aws:SourceArn: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+          - Sid: AllowVPCFlowLogsAclCheck
+            Effect: Allow
+            Principal:
+              Service: delivery.logs.amazonaws.com
+            Action:
+              - s3:GetBucketAcl
+            Resource: !Sub "arn:aws:s3:::${LogsBucket}"
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId                
 # ------------------------------------------------------------------
 # Storage End
 # ------------------------------------------------------------------
