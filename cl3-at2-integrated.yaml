@@ -1,6 +1,8 @@
 # =====================================================================================
 # Work in progress, semi integrated deployment of YATs Enrolline application
 # =====================================================================================
+# Added Jacob's database section and Grace's compute section.
+#
 
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >-
@@ -261,23 +263,7 @@ Resources:
 # ------------------------------------------------------------------
 # Compute Start - Grace
 # ------------------------------------------------------------------
-  LoadBalancer:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Name: enrolline-alb
-      Type: application
-      Scheme: internet-facing
-      IpAddressType: ipv4
-      Subnets:
-        - !Ref PublicSubnetA
-        - !Ref PublicSubnetB
-      SecurityGroups:
-        - !Ref AlbSecurityGroup
-      Tags:
-        - Key: Name
-          Value: enrolline-alb
-    DependsOn: PublicRoute
-
+  
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -344,6 +330,7 @@ Resources:
               - Key: Name
                 Value: enrolline-app
 
+# Increased the ASG max capacity to 4. Configured the ASG to place instances in AppSubnetB.
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     DependsOn:
@@ -353,9 +340,12 @@ Resources:
       AutoScalingGroupName: enrolline-asg
       MinSize: '1'
       DesiredCapacity: '1'
-      MaxSize: '2'
+      # Mod here
+      MaxSize: '4'
       VPCZoneIdentifier:
         - !Ref AppSubnetA
+        # Mod here
+        - !Ref AppSubnetB
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
@@ -377,6 +367,46 @@ Resources:
         PredefinedMetricSpecification:
           PredefinedMetricType: ASGAverageCPUUtilization
         TargetValue: 70
+
+  # The scheduled scaling policy that keeps the instances at max capacity during the intake, census and AVETMISS submission periods. 
+  # The ASG's desired capacity is raised from 1 to 4 from 1st Jan - 7th Mar and 26th June - 4th Aug
+  ScheduledScaleUpJanPolicy:
+    Type: AWS::AutoScaling::ScheduledAction
+    Properties:
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      Recurrence: "0 0 1 1 *"
+      MinSize: 1
+      MaxSize: 4
+      DesiredCapacity: 4
+
+  ScheduledScaleDownMarPolicy:
+    Type: AWS::AutoScaling::ScheduledAction
+    Properties:
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      Recurrence: "0 0 8 3 *"
+      MinSize: 1
+      MaxSize: 4
+      DesiredCapacity: 1
+
+  ScheduledScaleUpJunPolicy:
+    Type: AWS::AutoScaling::ScheduledAction
+    Properties:
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      Recurrence: "0 0 26 6 *"
+      MinSize: 1
+      MaxSize: 4
+      DesiredCapacity: 4
+
+  ScheduledScaleDownAugPolicy:
+    Type: AWS::AutoScaling::ScheduledAction
+    Properties:
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      Recurrence: "0 0 5 8 *"
+      MinSize: 1
+      MaxSize: 4
+      DesiredCapacity: 1
+
+# END COMPUTE SECTION - Grace
 # ------------------------------------------------------------------
 # Compute End
 # ------------------------------------------------------------------
