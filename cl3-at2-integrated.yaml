@@ -588,7 +588,7 @@ Resources:
           
 # S3 Access Logs Bucket #
   LogsBucket:
-    Type: AWS::S3::Bucket:
+    Type: AWS::S3::Bucket #Integrator removed eroneous colon that was causing parser error
     Properties:
       BucketName: !Ref LogsBucketName
       VersioningConfiguration:
