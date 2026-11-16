@@ -301,8 +301,6 @@ Resources:
           Value: enrolline-s3-gateway-endpoint
   
   #Integrator added this block - Alice had prior commitments so I took on the work load.
-  #Also, cloudwatch flow logs are not available in learner lab, so we opted to send the 
-  #logs to S3 instead.
   VPCFlowLog:
     Type: AWS::EC2::FlowLog
     Properties:
@@ -310,9 +308,9 @@ Resources:
       ResourceType: VPC
       TrafficType: ALL
       LogDestinationType: s3 #was S3, caused errors.
-      LogDestination: !Sub "arn:${AWS::Partition}:s3:::${LogsBucket}" #was !ref LogsBucket, doesn't work that wat, needs to be arn.
+      LogDestination: !Sub "arn:${AWS::Partition}:s3:::${LogsBucket}/vpc-flow-logs/" #modified to match policy
       MaxAggregationInterval: 600
-      
+    DependsOn: LogsBucketPolicy   
 # ------------------------------------------------------------------
 # Network End
 # ------------------------------------------------------------------
@@ -345,8 +343,9 @@ Resources:
       Tags:
         - Key: Name
           Value: enrolline-alb
-    DependsOn: PublicRoute
-    #DependsOn: LogsBucketPolicy #not required.
+    DependsOn: 
+      - PublicRoute
+      - LogsBucketPolicy
     
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -626,20 +625,62 @@ Resources:
           Value: yat-enrolline-logs
 
 # Bucket Policy that grants the ALB permission to write access logs #
-# Integrator simplified this policy, I could not get the code to parse with the previous code or variations thereof
+# 3rd rewrite of the policy
   LogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
       Bucket: !Ref LogsBucket
       PolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
-          - Effect: Allow
+
+        # Allow S3 server access logs #
+          - Sid: AllowS3ServerAccessLogs
+            Effect: Allow
             Principal:
-              # Automatically pulls from the ELBAccountId parameter above
-              AWS: !Sub 'arn:aws:iam::${AlbAccountId}:root'
-            Action: 's3:PutObject'
-            Resource: !Sub '${LogsBucket.Arn}/*'
+              Service: logging.s3.amazonaws.com
+            Action:
+              - s3:PutObject
+            Resource: !Sub "arn:aws:s3:::${LogsBucket}/yat-enrolline-logs/*"
+            Condition:
+              ArnLike:
+                aws:SourceArn: !Sub "arn:aws:s3:::${DocumentBucketName}"
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+
+        # Allow ALB access logs #
+          - Sid: AllowALBAccessLogs
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AlbAccountId}:root"
+            Action:
+              - s3:PutObject
+            Resource: !Sub "arn:aws:s3:::${LogsBucket}/alb-access-logs/AWSLogs/${AWS::AccountId}/*"
+            
+        # Allow VPC Flow Logs #
+          - Sid: AllowVPCFlowLogs
+            Effect: Allow
+            Principal:
+              Service: delivery.logs.amazonaws.com
+            Action:
+              - s3:PutObject
+            Resource: !Sub "arn:aws:s3:::${LogsBucket}/vpc-flow-logs/AWSLogs/${AWS::AccountId}/*"
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+                s3:x-amz-acl: bucket-owner-full-control
+              ArnLike:
+                aws:SourceArn: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+          - Sid: AllowVPCFlowLogsAclCheck
+            Effect: Allow
+            Principal:
+              Service: delivery.logs.amazonaws.com
+            Action:
+              - s3:GetBucketAcl
+            Resource: !Sub "arn:aws:s3:::${LogsBucket}"
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId                
 # ------------------------------------------------------------------
 # Storage End
 # ------------------------------------------------------------------
