@@ -318,7 +318,7 @@ Resources:
         # Might have to add a Parameter for bucket name
         # Grace changed bucket name to reference the new parameter defining it.
           Value: !Ref LogsBucket
-        - Key: acces_logs.s3.prefix
+        - Key: access_logs.s3.prefix #integrator corrected spelling, was acces_logs.s3.prefix
           Value: alb-access-logs
         
       SecurityGroups:
