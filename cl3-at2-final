@@ -301,6 +301,8 @@ Resources:
           Value: enrolline-s3-gateway-endpoint
   
   #Integrator added this block - Alice had prior commitments so I took on the work load.
+  #Also, cloudwatch flow logs are not available in learner lab, so we opted to send the 
+  #logs to S3 instead.
   VPCFlowLog:
     Type: AWS::EC2::FlowLog
     Properties:
