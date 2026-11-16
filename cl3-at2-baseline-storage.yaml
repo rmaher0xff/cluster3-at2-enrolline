@@ -1,53 +1,53 @@
 # Document Bucket #
 DocumentBucket:
   Type: AWS::S3::Bucket
+  DependsOn: LogsBucketPolicy
   Properties:
     BucketName: !Ref DocumentBucketName
-      
+
     VersioningConfiguration:
       Status: Enabled
-              
-  PublicAccessBlockConfiguration:
-    BlockPublicAcls: true
-    BlockPublicPolicy: true
-    IgnorePublicAcls: true
-    RestrictPublicBuckets: true
 
-  BucketEncryption:
-    ServerSideEncryptionConfiguration:
-      - ServerSideEncryptionByDefault:
-          SSEAlgorithm: AES256              
+    PublicAccessBlockConfiguration:
+      BlockPublicAcls: true
+      BlockPublicPolicy: true
+      IgnorePublicAcls: true
+      RestrictPublicBuckets: true
 
-  LifecycleConfiguration:
-    Rules: 
-      - Id: TransitionToStandardIA
-        Status: Enabled
-        Transitions:
-          - StorageClass: STANDARD_IA
-            TransitionInDays: 90
-# Objects are moved to glacier 730 days after CREATION - not 730 days after the transition to Standard-IA #
-      - Id: TransitionToGlacierInstantRetrieval
-        Status: Enabled
-        Transitions:
-          - StorageClass: GLACIER_IR
-            TransitionInDays: 730
-# Send S3 access logs here #
-  LoggingConfiguration:
-    DestinationBucketName: !Ref LogsBucket
-    LogFilePrefix: yat-enrolline-logs/
-    
-  Tags:
-    - Key: Name
-      Value: yat-enrolline-documents
-          
+    BucketEncryption:
+      ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+
+    LifecycleConfiguration:
+      Rules:
+        - Id: DocumentLifecycle
+          Status: Enabled
+          Transitions:
+            - StorageClass: STANDARD_IA
+              TransitionInDays: 90
+            - StorageClass: GLACIER_IR
+              TransitionInDays: 730
+
+    # Send S3 server access logs here #
+    LoggingConfiguration:
+      DestinationBucketName: !Ref LogsBucket
+      LogFilePrefix: yat-enrolline-logs/
+
+    Tags:
+      - Key: Name
+        Value: yat-enrolline-documents
+
+
 # S3 Access Logs Bucket #
 LogsBucket:
   Type: AWS::S3::Bucket
   Properties:
     BucketName: !Ref LogsBucketName
+
     VersioningConfiguration:
       Status: Enabled
-              
+
     PublicAccessBlockConfiguration:
       BlockPublicAcls: true
       BlockPublicPolicy: true
@@ -63,8 +63,8 @@ LogsBucket:
       - Key: Name
         Value: yat-enrolline-logs
 
-          
-# Bucket Policy that grants the ALB permission to write access logs #
+
+# Bucket Policy for S3 and ALB Access Logs #
 LogsBucketPolicy:
   Type: AWS::S3::BucketPolicy
   Properties:
@@ -72,11 +72,29 @@ LogsBucketPolicy:
     PolicyDocument:
       Version: "2012-10-17"
       Statement:
+
+        # Allow S3 server access logs #
+        - Sid: AllowS3ServerAccessLogs
+          Effect: Allow
+          Principal:
+            Service: logging.s3.amazonaws.com
+          Action:
+            - s3:PutObject
+          Resource: !Sub "arn:aws:s3:::${LogsBucket}/yat-enrolline-logs/*"
+          Condition:
+            ArnLike:
+              aws:SourceArn: !Sub "arn:aws:s3:::${DocumentBucketName}"
+            StringEquals:
+              aws:SourceAccount: !Ref AWS::AccountId
+
+        # Allow ALB access logs #
         - Sid: AllowALBAccessLogs
           Effect: Allow
           Principal:
-            AWS: !Sub "arn:aws:iam::${AlbAccountId}:root"
-        Action: "s3:PutObject"
-        Resource: !Sub "arn:aws:s3:::${LogsBucket}/yat-enrolline-logs/AWSLogs/${AWS::AccountId}/*"
-
-
+            Service: logdelivery.elasticloadbalancing.amazonaws.com
+          Action:
+            - s3:PutObject
+          Resource: !Sub "arn:aws:s3:::${LogsBucket}/alb-access-logs/AWSLogs/${AWS::AccountId}/*"
+          Condition:
+            ArnLike:
+              aws:SourceArn: !Sub "arn:aws:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:loadbalancer/*"
