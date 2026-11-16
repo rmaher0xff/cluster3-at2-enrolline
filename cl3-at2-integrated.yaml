@@ -344,7 +344,7 @@ Resources:
         - Key: Name
           Value: enrolline-alb
     DependsOn: PublicRoute
-    DependsOn: LogsBucketPolicy #added by integrator and connor for S3 permissions
+    #DependsOn: LogsBucketPolicy #not required.
     
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
