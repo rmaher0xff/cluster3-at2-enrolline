@@ -635,8 +635,8 @@ LogsBucketPolicy:
           Effect: Allow
           Principal:
             AWS: !Sub "arn:aws:iam::${AlbAccountId}:root"
-        Action: "s3:PutObject"
-        Resource: !Sub "arn:aws:s3:::${LogsBucket}/yat-enrolline-logs/AWSLogs/${AWS::AccountId}/*"
+            Action: "s3:PutObject"
+            Resource: !Sub "arn:aws:s3:::${LogsBucket}/yat-enrolline-logs/AWSLogs/${AWS::AccountId}/*"
 # ------------------------------------------------------------------
 # Storage End
 # ------------------------------------------------------------------
