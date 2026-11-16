@@ -380,8 +380,17 @@ Resources:
         UserData:
           Fn::Base64: |
             #!/bin/bash
-            dnf install -y httpd
-            echo "     __  __       _____                 _ _ _       _____       __  __     
+          dnf install -y httpd
+          cat << 'EOF' > /var/www/html/index.html
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <title>Welcome</title>
+          </head>
+          <body>
+          <pre>
+               __  __       _____                 _ _ _       _____       __  __     
                \ \/ /      | ____|_ __  _ __ ___ | | (_)_ __ | ____|      \ \/ /     
            _____\  /_____  |  _| | '_ \| '__/ _ \| | | | '_ \|  _|    _____\  /_____ 
 
@@ -391,7 +400,11 @@ Resources:
 
           |_____|_____|_____|_____|_____\ V // _ \ | ||_____|_____|_____|_____|_____|
           |_____|_____|_____|_____|_____|| |/ ___ \| ||_____|_____|_____|_____|_____|
-                                         |_/_/   \_\_|                               " > /var/www/html/index.html
+                                         |_/_/   \_\_|                               
+          </pre>
+          </body>
+          </html>
+          EOF
           systemctl enable --now httpd
         TagSpecifications:
           - ResourceType: instance
