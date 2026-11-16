@@ -1,18 +1,64 @@
+# Document Bucket #
   DocumentBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Ref DocumentBucketName
+      
       VersioningConfiguration:
         Status: Enabled
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
+              
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256              
+
+LifeCycleConfiguration:
+  Rules: 
+    - Id: TransitionToStandardIA
+      Status: Enabled
+      Transitions:
+        - StorageClass: STANDARD_IA
+          TransitionInDays: 90
+# Objects are moved to glacier 730 days after CREATION - not 730 days after the transition to Standard-IA #
+    - Id: TransitionToGlacierInstantRetrieval
+      Status: Enabled
+      Transitions:
+        - StorageClass: GLACIER_IR
+          TransitionInDays: 730
+# Send S3 access logs here #
+  LoggingConfiguration:
+    DestinationBucketName: !Ref LogsBucket
+    LogFilePrefix: yat-enrolline-logs/
+    
       Tags:
         - Key: Name
-          Value: enrolline-bucket
+          Value: yat-enrolline-documents
+          
+# S3 Access Logs Bucket #
+  LogsBucket:
+    Type: AWS::S3::Bucket:
+    Properties:
+      BucketName: !Ref LogsBucketName
+  VersioningConfiguration:
+        Status: Enabled
+              
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+      Tags:
+        - Key: Name
+          Value: yat-enrolline-logs
