@@ -624,6 +624,7 @@ Resources:
           Value: yat-enrolline-logs
 
 # Bucket Policy that grants the ALB permission to write access logs #
+# Integrator simplified this policy, I could not get the code to parse with the previous code or variations thereof
   LogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
