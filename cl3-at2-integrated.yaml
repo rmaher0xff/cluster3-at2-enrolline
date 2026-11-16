@@ -308,9 +308,9 @@ Resources:
       ResourceType: VPC
       TrafficType: ALL
       LogDestinationType: s3 #was S3, caused errors.
-      LogDestination: !Sub "arn:${AWS::Partition}:s3:::${LogsBucket}" #was !ref LogsBucket, doesn't work that wat, needs to be arn.
+      LogDestination: !Sub "arn:${AWS::Partition}:s3:::${LogsBucket}/vpc-flow-logs/" #modified to match policy
       MaxAggregationInterval: 600
-      
+    DependsOn: LogsBucketPolicy   
 # ------------------------------------------------------------------
 # Network End
 # ------------------------------------------------------------------
@@ -343,8 +343,9 @@ Resources:
       Tags:
         - Key: Name
           Value: enrolline-alb
-    DependsOn: PublicRoute
-    #DependsOn: LogsBucketPolicy #not required.
+    DependsOn: 
+      - PublicRoute
+      - LogsBucketPolicy
     
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -651,13 +652,11 @@ Resources:
           - Sid: AllowALBAccessLogs
             Effect: Allow
             Principal:
-              Service: logdelivery.elasticloadbalancing.amazonaws.com
+              AWS: !Sub "arn:aws:iam::${AlbAccountId}:root"
             Action:
               - s3:PutObject
             Resource: !Sub "arn:aws:s3:::${LogsBucket}/alb-access-logs/AWSLogs/${AWS::AccountId}/*"
-            Condition:
-              ArnLike:
-                aws:SourceArn: !Sub "arn:aws:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:loadbalancer/*"
+            
         # Allow VPC Flow Logs #
           - Sid: AllowVPCFlowLogs
             Effect: Allow
