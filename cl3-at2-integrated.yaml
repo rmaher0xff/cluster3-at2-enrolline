@@ -67,6 +67,12 @@ Parameters:
     Type: String
     Default: yat-enrolline-logs
     Description: S3 bucket names are globally unique. Add -<accountid> eg. yat-enrolline-logs-123412341234
+    
+  #Adding permissions for s3 access for ALB
+  AlbAccountId:
+    Type: String
+    Default: "127311923021"
+    Description: Official AWS regional Elastic Load Balancing account ID for us-east-1 # it would be 783225319266 for sydney region but we can't deploy there in learnerlab
 
 Resources:
   
@@ -326,6 +332,7 @@ Resources:
         - Key: Name
           Value: enrolline-alb
     DependsOn: PublicRoute
+    DependsOn: LogsBucketPolicy #added by integrator and connor for S3 permissions
     
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -605,6 +612,20 @@ Resources:
       Tags:
         - Key: Name
           Value: yat-enrolline-logs
+# bucket policy for ALB access          
+  LogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              # Automatically pulls from the ELBAccountId parameter above
+              AWS: !Sub 'arn:aws:iam::${AlbAccountId}:root'
+            Action: 's3:PutObject'
+            Resource: !Sub '${LogsBucket.Arn}/*'
 # ------------------------------------------------------------------
 # Storage End
 # ------------------------------------------------------------------
