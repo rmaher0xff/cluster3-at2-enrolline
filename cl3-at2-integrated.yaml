@@ -565,7 +565,7 @@ Resources:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256              
 #integrator added indentation
-      LifeCycleConfiguration:
+      LifecycleConfiguration: #integrator changed LifeCycle to Lifecycle, was causing deployment errors.
         Rules: 
           - Id: TransitionToStandardIA
             Status: Enabled
