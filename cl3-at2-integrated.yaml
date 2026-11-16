@@ -280,6 +280,19 @@ Resources:
       Tags:
         - Key: Name
           Value: enrolline-db-sg
+  #added S3 VPC endpoint
+  S3GatewayEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.s3
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - !Ref AppRouteTable
+      Tags:
+      #Integrator changed for consistant naming conventions
+        - Key: Name
+          Value: enrolline-s3-gateway-endpoint
 # ------------------------------------------------------------------
 # Network End
 # ------------------------------------------------------------------
