@@ -624,18 +624,19 @@ Resources:
           Value: yat-enrolline-logs
 
 # Bucket Policy that grants the ALB permission to write access logs #
-LogsBucketPolicy:
-  Type: AWS::S3::BucketPolicy
-  Properties:
-    Bucket: !Ref LogsBucket
-    PolicyDocument:
-      Version: "2012-10-17"
-      Statement:
-        - Effect: Allow
-          Principal:
-            AWS: !Sub "arn:aws:iam::${AlbAccountId}:root"
-          Action: "s3:PutObject"
-          Resource: !Sub "arn:aws:s3:::${LogsBucket.Arn}/yat-enrolline-logs/AWSLogs/${AWS::AccountId}/*"#removed sid and added .arn to logs bucket
+  LogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              # Automatically pulls from the ELBAccountId parameter above
+              AWS: !Sub 'arn:aws:iam::${AlbAccountId}:root'
+            Action: 's3:PutObject'
+            Resource: !Sub '${LogsBucket.Arn}/*'
 # ------------------------------------------------------------------
 # Storage End
 # ------------------------------------------------------------------
